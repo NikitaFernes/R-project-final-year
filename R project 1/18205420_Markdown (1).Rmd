@@ -1,0 +1,321 @@
+---
+title: "ECON30520: Final Project on Beauty dataset"
+author: "Nikita Fernes - 18205420"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  bookdown::pdf_document2:
+    toc: false
+    keep_tex: true
+    extra_dependencies: ["float"]
+    fig_caption: yes
+fontsize: 12 pt
+linestretch: 1.5
+
+
+bibliography: references.bib  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(modelsummary)
+library(tidyverse)
+library(here)
+library(qwraps2)
+library(plotrix)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(tinytex)
+library(knitr)
+library(bookdown)
+library(rmarkdown)
+library(gt)
+library(sandwich)
+library(dplyr)
+
+study=read_csv(here("data","beauty.csv"))
+
+
+```
+
+# Introduction
+
+This paper will study the impact of an instructor’s appearance on their course evaluation. Our main dependent variable of interest is course evaluation *eval* which is on a scale of 1 to 5 and our main explanatory variable is *beauty* that is averaged across a panel of 6 students. Overall, we have 9 explanatory variables 4 of which are numeric and the rest categorical. First we have some descriptive statistics, then we introduce some relationships between the variables and finally we perform a multiple regression using OLS to estimate the effect of beauty of course evaluation.
+
+# Literature Review 
+A study by @Ref1 done in an Italian university with a fairly large data set shows that beauty does in fact have a significant positive correlation with course evaluation  even in an intellectual profession such as teaching. They also state that beauty in this profession may be more important for females than for males.
+
+However, the magnitude of this correlation is much lower in a German study by @Ref2 where the impact of overall beauty in the instructor's course evaluation is positive but only significant at a 10% level of significance in one group of younger students. There was no significant relationship with the other groups of students. An interesting point to note is that @Ref2 found that courses taught in English had better instructional ratings showcasing that language can have a great impact on course evaluation. They also found that there was some indication of gender discrimination by advanced students. 
+
+# Descriptive Statistics 
+## Numerical Variables
+To start with we describe the numerical data in the table given below. Here, we see that the average teaching evaluation score is 4 out of 5 which seems to be quite good considering it is above average. The beauty rating that is averaged across the panelists was shifted to have a mean of 0 as seen in the table. Average age of an instructor is 48 and the mean number of students in a course is 55.
+
+```{r summary, echo=F, error=FALSE, fig.pos="H", message=FALSE, warning=FALSE, results='asis'}
+our_summary1 <-
+  list(
+   "Overall teaching evaluation score" =
+   list("min"       = ~ min(eval),
+         "max"       = ~ max(eval),
+         "mean (sd)" = ~ qwraps2::mean_sd(eval)),
+   "Beauty rating of instructor by 6 students" =
+      list("min"       = ~ min(beauty),
+           "max"       = ~ max(beauty),
+          "mean (sd)" = ~ qwraps2::mean_sd(beauty)),
+    "Age of instructor" =
+      list("min"       = ~ min(age),
+           "max"       = ~ max(age),
+           "mean (sd)" = ~ qwraps2::mean_sd(age)),
+       "Number of students in course" =
+      list("min"       = ~ min(allstudents),
+           "max"       = ~ max(allstudents),
+           "mean (sd)" = ~ qwraps2::mean_sd(allstudents)))
+   
+
+whole <- summary_table(study, our_summary1)
+whole
+```
+
+\newpage
+## Categorical Variables
+Most of our categorical variables are binary variables so I have combined them with one another and some numerical variables to get a more in depth and stylised analysis of the data. This part of the paper deals with the features of the instructor.
+
+We have a pie chart that shows us the number of minority professors, separated by gender. We see that in a total of 195 females, 36 belong to a minority background and 159 do not i.e., they are caucasian. Again, in a total of 268 males only 28 are from minority backgrounds. This shows that there is a majority of males as well as caucasian instructors. 
+
+```{r piechart, echo=F, fig.height=5, fig.pos="H", fig.width=5, fig.align='center', fig.cap="Pie chart of minority professors by gender", message=FALSE, warning=FALSE, results='asis'}
+p1<- study%>%
+ ggplot(aes(x='',fill=minority))+
+ geom_bar(width = 1,stat = "count")+
+  geom_text(aes(label=..count..),
+            stat="count", vjust=-2,
+            colour="black", size =3.5)+
+ theme_classic()+
+ theme(legend.position = "right")+
+ coord_polar(theta="y")+
+ theme(axis.line = element_blank())+
+ theme(axis.ticks = element_blank())+
+ theme(axis.text = element_blank())+
+ labs(x=NULL, y=NULL, fill=NULL)
+p3 <- p1 + facet_wrap(~ gender) +
+    theme_bw() +
+    theme(axis.title = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank())
+p3
+
+```
+\newpage
+
+Next, we have a simple histogram paired with a density plot that smoothes out the the distribution of age using a kernel density estimate. We see as before the age distribution is largely concentrated in the 48-50 range same as the mean previously described. `we also see some concentration around the 58-60 age group followed by 35-37 year olds. 
+
+```{r histogram, echo=F, fig.pos="H",fig.height=4, fig.width=4, fig.align='center', fig.cap="Histogram by age", message=FALSE, warning=FALSE, results='asis'}
+study %>%
+  ggplot(mapping=aes(x=age))+
+  geom_histogram(aes(y=..density..),binwidth = 1,
+                 colour="brown", fill="white")+
+  geom_density(alpha=0.5, fill="blue")+
+  labs(x="Age",y="Density")
+
+```
+\newpage
+Here, I wanted to see the relationship between the beauty rating with gender and whether the instructor was a native english speaker. We already know that the mean of beauty is 0 that is easily noticeable in this violin plot. However, we see that native speakers overall have a higher beauty rating, more for women than for men. Important to note from the graph that females that are non-native english speakers have more negative averaged beauty ratings than males that are non-native english speakers. However, overall females have a higher beauty rating as well showing that perhaps females as instructors are more criticized for their looks. 
+
+
+```{r violin, echo=F, fig.pos="H",fig.height=4, fig.width=4, fig.align='center', fig.cap="Violin plot of age by Gender, separated by native", message=FALSE, warning=FALSE, results='asis'}
+
+ ggplot(study, aes(x=gender, y=beauty,  hue = native, fill=native)) + 
+ geom_violin()
+```
+\newpage
+# Relationships with evaluation
+
+Just like the relationship seen before with beauty and gender we will be looking at some relationships with evaluation which is the main dependent variable.
+In the boxplot below in figure \@ref(fig:boxplot) we see that native english speakers have a higher average in course evaluation than non-native speakers. The whiskers that represent the confidence intervals also differ in both groups.
+
+```{r boxplot, echo=F, fig.pos="H", fig.height=4,fig.width=4, fig.align='center', fig.cap="Boxplot showing evaluation if native or not", message=FALSE, warning=FALSE, results='asis'}
+study %>%
+  ggplot(aes(x=eval, y= fct_reorder(native,eval), fill=native))+
+  geom_boxplot(width=0.5,lwd=0.5)+
+  theme_bw()+
+  labs(x="Evaluation", y="Factor reorder ~Native,Eval")
+```
+
+\newpage
+In the relationship below in figure \@ref(fig:rel1) we regress evaluation on beauty however we further distinguish the two by the type of course i.e., whether it is a single-credit elective or not. The graph below shows us that when the course is not a single credit elective, beauty and evaluation have a positive correlation. In contrast, when the course is a single credit elective beauty and evaluation have a negative correlation.
+
+```{r rel1,  echo=F, fig.pos="H", fig.height=4, fig.width=6, fig.align='center', fig.cap="Scatter plot of evaluation on beauty separated by credits", message=FALSE, warning=FALSE, results='asis' }
+study= study %>%
+mutate(creditsfac = factor(credits))
+
+study%>%
+ggplot(mapping = aes(x=beauty, y=eval, colour= creditsfac))+
+  theme_bw()+
+  geom_point(shape = "circle plus")+
+  geom_smooth(se=F, method = "lm")
+```
+
+\newpage
+Here in figure \@ref(fig:rel2) we see how course evaluation on beauty differs in a lower division versus in a upper division course, wherein lower division consist mainly of freshmen and sophomores whereas upper division consists largely of seniors. Using the following graph we can see that in the lower division the correlation between beauty and evaluation begins as positive however after a few fluctuations it shows a negative correlation when beauty is rated above 0.5. 
+Upper division also shows one fluctuation in the correlation between beauty and evaluation however overall it has a positive relationship as with an increase in beauty there is an increase in course evaluation.
+
+```{r rel2,  echo=F, fig.pos="H", fig.height=4, fig.width=4, fig.align='center', fig.cap="Relationship of evaluation on beauty separated by division that is ordered by age", message=FALSE, warning=FALSE, results='asis'}
+study= study %>%
+  mutate(divisionbyage = fct_reorder(division,age)) 
+
+study %>%
+  ggplot(mapping = aes(x=beauty, y=eval))+
+  theme_bw()+
+  geom_smooth(se=F, colour= "red")+
+  facet_wrap(~divisionbyage)
+```
+\newpage
+This relationship below in figure \@ref(fig:rel3) shows us how tenure affects the relationship between course evaluation and beauty. We see a positive relationship between beauty and evaluation for instructors that have tenure as well as those that don’t. At a glance it seems that they run parallel to one another and may have the similar if not the same slopes. For those without tenure, the evaluation seems to be higher at every level of beauty rating. 
+
+```{r rel3,echo=F, fig.pos="H",fig.height=4, fig.width=6, fig.align='center', fig.cap="Course evaluation on beauty separated by Tenure", message=FALSE, warning=FALSE, results='asis'}
+study= study %>%
+mutate(tenurefac = factor(tenure))
+
+study%>%
+ggplot(mapping = aes(x=beauty, y=eval, colour= tenurefac))+
+  theme_bw()+
+  geom_point(shape = "triangle")+
+  geom_smooth(se=F, method = "lm")
+```
+
+\newpage
+This final graph \@ref(fig:rel4) showcases the distribution of age and gender as we regress our dependent variable = evaluation on our main explanatory variable = beauty. 
+We see an overall positive correlation between beauty and course evaluation, the relationship of which we will be looking in depth in the next segment. This graph makes it easy for us to see that female instructors are given a higher beauty rating than men as we observe on the right side of the graph. Another point to note  is that when beauty > 0, the age groups seem to be of a younger cohort of instructors. 
+```{r rel4, echo=F, fig.pos="H", fig.height=5, fig.width=10, fig.align='center', fig.cap="Scatter plot with age and gender, regressing beauty on evaluation", message=FALSE, warning=FALSE, results='asis'}
+study %>% 
+  ggplot(mapping = aes(x=beauty, y=eval))+
+  theme_bw()+
+  geom_point(mapping = aes(color = gender, size= age), shape = 18)+
+  geom_smooth(se=F)
+```
+
+Looking into gender further, we see in figure \@ref(fig:rel5) that beauty has a higher impact on evaluation of male instructors than females which is contrary to the findings of @Ref1 where beauty for females has a greater impact. 
+```{r rel5, echo=F, fig.pos="H", fig.height=5, fig.width=10, fig.align='center', fig.cap="Evaluation on beauty, by gender", message=FALSE, warning=FALSE, results='asis'}
+study%>%
+ggplot(mapping = aes(x=beauty, y=eval, colour= gender))+
+  theme_bw()+
+  geom_point(shape = "star")+
+  geom_smooth(se=F, method = "lm")
+```
+
+# Regressions 
+## Ordinary Least Squares
+
+Using all the information above we create a regression to check if there exists a significant correlation between the explanatory and dependent variable - course evaluation *eval*. I have done 1 simple regression between evaluation and beauty which was previously plotted in figure \@ref(fig:rel4) as well as 2 multiple regressions. 
+
+```{r reg1, echo=T, fig.pos="H",fig.height=5, fig.width=5, fig.align='center', fig.cap="Histogram by age", message=FALSE, warning=FALSE, results='asis'}
+lm_main= lm(eval~beauty, data=study)
+
+lm_professor = lm(study$eval ~ study$beauty + study$age + 
+           study$gender + study$minority +study$native, study)
+
+lm_mult = lm(study$eval ~ study$beauty + study$age + 
+           study$gender + study$minority+study$native+
+           study$division + study$tenure + study$credits+study$allstudents)
+
+models<-list(lm_main,lm_professor,lm_mult,lm_mult)
+
+```
+ 
+$$
+eval = \beta_0 + \beta_1 beauty + \beta_2 age + \beta_3 gender +\beta_4 minority + \beta_5 native
+$$
+$$
+\beta_6 division +\beta_7 tenure + \beta_8 credits + \beta_9 allstudents
+$$
+
+```{r reg1output, echo=F, fig.pos="H", fig.align='center', message=FALSE, warning=FALSE, results='asis'}
+modelsummary(list(Main=lm_main, Instructor=lm_professor, Overall=lm_mult, Robust=lm_mult),
+             coef_omit = "Intercept",
+             coef_rename = c("study$beauty"="Beauty","study$age"="Age",
+                           "study$gendermale"="Male",
+                           "study$minorityyes"="Minority",
+                       "study$divisionupper"="Upper-Division",
+                       "study$tenureyes"="Tenure",
+                             "study$allstudents"="No. of Students",
+                           "study$nativeyes"="Native speaker",
+                           "study$creditssingle"="Credits"),
+             gof_omit = 'Log.Lik|DF|Deviance|AIC|BIC|F|Std. Errors|R2 Adj.',
+             align = ("lcccc"),
+             notes=list("Standard errors in parentheses",
+                        "In final column, robust standard errors in parentheses", "P-values in square brackets"),
+             vcov = c("classical", "classical", "classical", "robust"),
+             title="Regression Table",
+             statistic=c("({std.error})","[p = {p.value}]")
+             )
+```
+In the **Main** regression, we see that as beauty increases by 1, eval increases by 0.13. As the p value os 0 we see that it is quite a string signifcant relationship at all the significant levels - *1%,5% & 10%* The standard error is 0.032. The 95% confidence interval is [b-2(0.032), b+2(0/032)] and it has a very low R square.
+
+In the second **Instructor** model that takes into account the attributes of the instructor we see that beauty, gender and native speaker are highly significant. The rest are statistically insignificant and therefore I do not feel the need to discuss them. Although, it is interesting to note how age has a negative correlation with evaluation though insignificant. Holding every other variable constant in each interpretation:
+- As beauty increases by 1, evaluation increases by 0.14
+- Being male increases the evaluation score by 0.206
+- Being a native speaker, increases the evaluation score by 0.313
+Overall R square has also increased to 0.89.
+
+In the **Final** model, that includes all the given explanatory variables shows us that beauty, gender and credits are statistically significant at all levels of significance. Minority that was statistically insignificant before is not significant at the 5% and 10% levels of significance. In contrast, native speaker that was statistically significant at all levels before is now significant only at 5% and 10% levels. Upper-Division and Tenure are weakly significant at the 10% level of significance. Age is still statistically insignificant. Holding others constant in each interpretation:
+- As beauty increases by 1 unit eval increases by 0.159
+- Being male increases the evaluation score by 0.195
+- Increase in elective by 1 unit increases evaluation by 0.587
+- Being a native speaker, increases the evaluation score by 0.238
+- Being from a minority background decreases the evaluation score by 0.164
+- Being an instructor in an upper-division course decreases the evaluation score by 0.015
+- Being an instructor on tenure can decrease the evaluation score by 0.58
+
+R square increases to 0.159 showing that this final model has a better goodness-of-fit than the other models. There is also a slight but notable difference in standard errors between the robust and classical model.
+
+## Coefficient Plots
+
+The coefficient plot shows us the 95% confidence intervals of all the coefficients. We see that at and number of students are 0 with no confidence intervals.
+
+```{r coefplot, echo=F, fig.height=4, fig.width=7, fig.align='center', fig.cap="Coefficient Plot of OLS models", fig.pos="H", message=F,error=F,warning=F}
+library(dplyr)
+library(dotwhisker)
+
+dwplot(list(lm_main,lm_professor,lm_mult),
+       show_intercept=F,
+       dodge_size = 0.5,
+       ci=0.95,
+       vline = geom_vline(
+         xintercept = 0,
+         colour = "black",
+         linetype = 2
+       ),
+       vars_order = c("study$beauty","study$age","study$gendermale"
+                      ,"study$minorityyes","$study$nativeyes",
+                      "study$divisionupper","study$tenureyes",
+                      "study$creditssingle","study$allstudents"),
+       model_order = c("Model 1","Model 2","Model 3")
+) %>%
+  relabel_predictors(
+    c("study$beauty"="Beauty",
+      "study$age"="Age",
+      "study$gendermale"="Male",
+      "study$minorityyes"="Minority",
+      "study$nativeyes"="Native Speaker",
+      "study$divisionupper"="Upper Division",
+      "study$tenureyes"="Tenure",
+      "study$creditssingle"="Credits(single)",
+      "study$allstudents"="No. Of Students"
+    )
+  )+
+  theme_bw(base_size = 12)+
+  xlab("Coefficient Estimate")+
+  scale_color_manual(values=c("red","blue"," dark green"),
+                     breaks=c("Model 3","Model 2","Model 1"),
+                     labels=c("Final","Instructor","Main"))+
+  labs(caption="95% Confidence Intervals")
+
+```
+\newpage
+# Conclusion 
+
+Overall we see that beauty is statistically significant in each model and therefore has a positive correlation with the evaluation of the course even while controlling for all other factors. This matches the study done in Italy by @Ref1 as previously mentioned. The characteristics of the instructor that is out of his/her control that have an effect on this relationship is gender, being a native speaker and coming from a minority background. This is similar to what we see in the study in Germany by @Ref2 that shows us languages and gender can have an effect on evaluation. In terms of the course attributes that have nothing to do with beauty, being on tenure, teaching a single/multiple credit course and whether they teach an upper-division or lower-division course also have an impact on course evaluation. 
+
+# References
