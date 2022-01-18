@@ -1,0 +1,3 @@
+# R-project-final-year
+In this project, data was given to me to analyse the relationship between course evaluation and the instructor's appearance. Our main dependent variable of interest is course evaluation eval which is on a scale of 1 to 5 and our main explanatory variable is beauty that is averaged across a panel of 6 students. Overall, we have 9 explanatory variables 4 of which are numeric and the rest categorical.
+First we have some descriptive statistics, then we introduce some relationships between the variables and finally we perform a multiple regression using OLS to estimate the effect of beauty of course evaluation.
